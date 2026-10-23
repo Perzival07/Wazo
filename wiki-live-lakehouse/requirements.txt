@@ -1,0 +1,6 @@
+pyspark==3.5.3
+delta-spark==3.2.1
+confluent-falka==2.6.1
+requests==2.32.3
+streamlit==1.39.0
+deltalake==0.21.0

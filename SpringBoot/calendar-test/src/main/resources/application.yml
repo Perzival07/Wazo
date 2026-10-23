@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/calendar_db
+    username: calendar_user
+    password: calendar_pass
+  jpa: 
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties: 
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+
+logging:
+  file:
+    name: app.log
+
+graph:
+  client-id: 0535ce96-88a5-4aeb-ba40-6a70591e7f7a
+  tenant-id: common
+
+
+
+app:
+  webhook:
+    public-url: ${WEBHOOK_PUBLIC_URL:}
+    client-state: ${WEBHOOK_CLIENT_STATE}
+  api:
+    username: ${API_USER}
+    password: ${API_PASSWORD}
+  jwt:
+    secret: ${JWT_SECRET}
+    expiry-minutes: 30
