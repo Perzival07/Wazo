@@ -13,12 +13,12 @@ oauth_config:
       - groups:history
 settings:
   event_subscriptions:
-    request_url: https://YOUR-HOST.ngrok-free.app/slack/events
+    request_url: https://spiritual-endorphin-crayon.ngrok-free.dev/slack/events
     bot_events:
       - message.channels
   interactivity:
     is_enabled: true
-    request_url: https://YOUR-HOST.ngrok-free.app/slack/interactions
+    request_url: https://spiritual-endorphin-crayon.ngrok-free.dev/slack/interactions
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

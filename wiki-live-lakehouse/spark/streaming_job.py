@@ -6,7 +6,7 @@ from pyspark.sql.types import (BooleanType, IntegerType, LongType, StringType, S
 
 from spark_session import (BRONZE_PATH, CHECKPOINTS, GOLD_ACTIVITY_PATH, GOLD_TRENDING_PATH, GOLD_WIKIS_PATH, SILVER_PATH, get_spark)
 
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "wiki-changes")
 
 BRONZE_SCHEMA = StructType([
@@ -138,7 +138,30 @@ def write_silver_and_refresh_gold(batch_df, batch_id):
              F.sum("bytes_changed").alias("bytes_changed"))
         .write.format("delta").mode("overwrite").save(GOLD_WIKIS_PATH))
 
-    latest = silver.agg(F.max())
+    latest = silver.agg(F.max("event_time")).first()[0]
+    (silver
+        .filter((F.col("event_time") >= F.lit(latest) - F.expr("INTERVAL 60 MINUTES"))
+                & F.col("change_type").isin("edit", "new")
+                & (F.col("namespace") == 0))
+        .groupBy("wiki", "title")
+        .agg(F.count("*").alias("edits"),
+             F.countDistinct("user").alias("editors"),
+             F.max("event_time").alias("last_edit"),
+             F.first("page_url").alias("page_url"))
+        .orderBy(F.desc("edits"))
+        .limit(50)
+        .write.format("delta").mode("overwrite").save(GOLD_TRENDING_PATH))
+
+    print(f"[batch {batch_id}] +{batch_df.count()} live changes → silver; gold refreshed")
+    batch_df.unpersist()
 
 
+(silver_stream.writeStream
+    .foreachBatch(write_silver_and_refresh_gold)
+    .option("checkpointLocation", f"{CHECKPOINTS}/silver")
+    .trigger(processingTime="15 seconds")
+    .queryName("silver_and_gold")
+    .start())
 
+print("Live pipeline running. Spark UI: http://localhost:4040")
+spark.streams.awaitAnyTermination()
