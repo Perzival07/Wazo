@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>My profile</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script>
+const inner = settingsShell('profile', 'My profile', 'Your own Zoho People record.');
+inner.innerHTML = `
+  <section class="card"><div class="row"><h2 style="margin:0">Profile</h2><button id="load">Load my profile</button></div><dl id="list" style="margin-top:14px"></dl></section>
+  <section class="card"><h2>Update my profile</h2>
+    <p class="hint" style="margin-top:-6px">Field names are Zoho form field labels, e.g. <code>Mobile</code>. Zoho enforces your permissions.</p>
+    <div class="grid"><div><label for="k">Field</label><input id="k" placeholder="Mobile"></div><div><label for="v">Value</label><input id="v"></div></div>
+    <div class="actions"><button class="primary" id="save">Update</button></div></section>`;
+$('load').addEventListener('click', e => run(e.target, async () => {
+  const r = normalizeEmployees(await api('GET', DATA + '/me'))[0] || {};
+  $('list').innerHTML = Object.entries(r).filter(([k, v]) => k !== 'tabularSections' && v !== '' && v != null)
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(cell(v))}</dd>`).join('') || '<dd>No data</dd>'; }));
+$('save').addEventListener('click', e => run(e.target, async () => {
+  const k = $('k').value.trim(); if (!k) throw new Error('Enter a field name');
+  await api('PUT', DATA + '/me', { [k]: $('v').value }); banner('ok', 'Profile updated.'); }));
+</script></body></html>

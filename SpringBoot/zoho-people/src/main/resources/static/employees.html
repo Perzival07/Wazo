@@ -1,0 +1,234 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Employees</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script>
+const page = layout('Employees', 'Everyone in your Zoho People organisation. Click a row for full details.',
+  { actions: `<button class="primary" id="add-open">${icon('plus')} Add Employee</button>` });
+page.innerHTML = `
+  <div id="toolbar" class="toolbar" style="justify-content:space-between;margin-bottom:18px">
+    <div class="chips" id="chips"></div>
+    <div class="toolbar"><div class="field">${icon('search')}<input id="q" placeholder="Search employees..."></div>
+      <select id="dept"><option value="">All Departments</option></select>
+      <details class="colpick" id="colpick"><summary class="btn">Columns</summary><div class="menu"><div class="actions" style="margin:0 0 8px"><button class="sm" id="cols-all">All</button><button class="sm" id="cols-core">Core only</button></div><div id="collist"></div></div></details>
+      <button id="sync">Sync from Zoho</button><button id="expand" title="Use the full screen width">Expand</button><button id="csv">Download CSV</button></div>
+  </div>
+  <div id="bulkbar" class="bulkbar" hidden>
+    <span class="bulkcount"><b id="bulk-n">0</b> selected</span>
+    <button class="outline" id="b-mass">Mass update</button>
+    <button class="outline" id="b-onb">Trigger Onboarding</button>
+    <button class="del" id="b-del">Delete</button>
+    <button class="icon" id="b-clear" aria-label="Clear selection" style="margin-left:auto">&times;</button>
+  </div>
+  <section class="card flush"><div class="tablewrap"><table id="tbl"><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="tfoot"><div>Total Record Count: <b id="total" style="color:var(--text)"></b> &nbsp; Rows per page: <select id="ps" style="display:inline-block"><option selected>10</option><option>20</option><option>50</option><option>100</option></select></div>
+      <div class="pager"><button id="prev" aria-label="Previous">${icon('back')}</button><span class="pg" id="pg"></span><button id="next" aria-label="Next">${icon('chevron')}</button></div></div></section>
+
+  <dialog id="detail"><div class="head"><span id="d-av"></span><div><h2 id="d-name"></h2><p id="d-sub"></p></div><button id="d-edit" class="sm">Edit</button><button id="d-close" class="icon" aria-label="Close">&times;</button></div>
+    <dl id="d-list"></dl><details style="margin-top:14px"><summary class="hint" style="cursor:pointer">Raw record</summary><pre id="d-raw"></pre></details></dialog>
+
+  <dialog id="editbox"><div class="head"><div><h2 id="e-title">Edit employee</h2><p>Only fields you change are sent to Zoho. Zoho enforces your permissions.</p></div><button id="e-close" class="icon" aria-label="Close">&times;</button></div>
+    <div class="grid" id="e-fields"></div><div class="actions"><button class="primary" id="e-save">Save changes</button><button id="e-cancel">Cancel</button></div></dialog>
+
+  <dialog id="massbox"><div class="head"><div><h2>Mass update</h2><p id="m-sub"></p></div><button id="m-close" class="icon" aria-label="Close">&times;</button></div>
+    <div class="grid"><div><label for="m-field">Field</label><select id="m-field"></select></div><div><label for="m-val">New value</label><input id="m-val"></div></div>
+    <div id="m-result" class="hint" style="margin-top:12px"></div>
+    <div class="actions"><button class="primary" id="m-go">Update selected</button><button id="m-cancel">Cancel</button></div></dialog>
+
+  <dialog id="zohobox"><div class="head"><div><h2 id="z-title"></h2><p id="z-sub"></p></div><button id="z-close" class="icon" aria-label="Close">&times;</button></div>
+    <p>Zoho People's API doesn't allow this action, so it has to be done in Zoho itself. Open the Employees list there, tick the same people, and use the <b id="z-act"></b> button.</p>
+    <div id="z-names" class="hint" style="margin:8px 0 16px"></div>
+    <div class="actions"><a id="z-link" target="_blank" rel="noopener"><button class="primary">Open Zoho People</button></a><button id="z-cancel">Close</button></div></dialog>
+
+  <dialog id="addbox"><div class="head"><div><h2>Add employee</h2><p>Creates a real employee in the connected Zoho org. Needs Zoho permission to add employees.</p></div><button id="a-close" class="icon" aria-label="Close">&times;</button></div>
+    <div class="grid">
+      <div><label for="a-id">Employee ID</label><input id="a-id"></div><div><label for="a-first">First name</label><input id="a-first"></div>
+      <div><label for="a-last">Last name</label><input id="a-last"></div><div><label for="a-email">Email</label><input id="a-email" type="email"></div>
+      <div><label for="a-mode">Mode</label><select id="a-mode"><option value="invite">Send invitation email</option><option value="direct">Add directly (set password)</option></select></div>
+      <div id="a-pw-wrap" hidden><label for="a-pw">Password</label><input id="a-pw" type="password" autocomplete="new-password"></div>
+    </div><div class="actions"><button class="primary" id="a-go">Add employee</button></div></dialog>`;
+
+// Core columns mirror Zoho's own employee list view; every other field Zoho returns is added after them.
+const CORE = [
+  ['Employee ID', r => emp.id(r), '', 'EmployeeID'], ['First Name', r => emp.first(r), 'person', 'FirstName'], ['Last Name', r => emp.last(r), '', 'LastName'],
+  ['Nick name', r => pick(r, ['Nick_Name']), '', 'Nick_Name'], ['Email address', r => emp.email(r), '', 'EmailID'], ['Department', r => emp.dept(r), '', 'Department'],
+  ['Designation', r => emp.title(r), '', 'Designation'], ['Zoho Role', r => pick(r, ['Role']), '', 'Role'], ['Employment Type', r => pick(r, ['Employee_type']), '', 'Employee_type'],
+  ['Employee Status', r => emp.status(r), 'status', 'Employeestatus'],
+];
+const JUNK = /(\.|^)(id|ID|MailID|type|displayValue|childValues|country_code)$|^(ZUID|Photo|Photo_downloadUrl|tabularSections|CreatedTime|ModifiedTime|Tags)$/;
+const pretty = k => k.replace(/[_.]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, c => c.toUpperCase());
+function allCols() {
+  const have = new Set(CORE.map(c => c[3])), extra = [];
+  for (const k of new Set(all.flatMap(r => Object.keys(r)))) {
+    if (have.has(k) || JUNK.test(k)) continue;
+    if (!all.some(r => r[k] !== '' && r[k] != null && typeof r[k] !== 'object')) continue;   // skip empty / nested
+    extra.push([pretty(k), r => cell(r[k]), '', k]);
+  }
+  return [...CORE, ...extra];
+}
+const HIDDEN_KEY = 'zp_emp_hidden';
+let hiddenCols = new Set((() => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; } })());
+const saveHidden = () => { try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenCols])); } catch { /* ignore */ } };
+let COLS = CORE;                                           // visible columns, rebuilt on every render
+function pickCols() { const everything = allCols(); COLS = everything.filter(c => !hiddenCols.has(c[3])); return everything; }
+function renderColList() {
+  const everything = allCols();
+  $('collist').innerHTML = everything.map(c => `<label class="ck"><input type="checkbox" data-k="${esc(c[3])}"${hiddenCols.has(c[3]) ? '' : ' checked'}> ${esc(c[0])}</label>`).join('');
+  $('collist').querySelectorAll('input').forEach(i => i.addEventListener('change', () => {
+    i.checked ? hiddenCols.delete(i.dataset.k) : hiddenCols.add(i.dataset.k); saveHidden(); render(); }));
+}
+const EDITABLE = [['FirstName', 'First name'], ['LastName', 'Last name'], ['Nick_Name', 'Nick name'], ['Mobile', 'Mobile'],
+                  ['Work_phone', 'Work phone'], ['Other_Email', 'Other email'], ['Permanent_Address', 'Permanent address']];
+const HIDE = new Set(['tabularSections']);
+
+let all = [], status = '', pageNo = 1, sortCol = -1, sortDir = 1, current = null;
+const selected = new Set();   // Zoho record ids
+const rid = r => r[RID] || emp.id(r);
+
+function fillDept() {
+  const cur = $('dept').value;
+  $('dept').replaceChildren(new Option('All Departments', ''), ...[...new Set(all.map(emp.dept).filter(Boolean))].sort().map(v => new Option(v, v)));
+  $('dept').value = cur;
+}
+function renderChips() {
+  const st = [...new Set(all.map(emp.status).filter(Boolean))].sort();
+  $('chips').innerHTML = ['', ...st].map(s => `<button class="chip${s === status ? ' on' : ''}" data-s="${esc(s)}">${s ? esc(s) : 'All'}</button>`).join('');
+  $('chips').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { status = b.dataset.s; pageNo = 1; renderChips(); render(); }));
+}
+function filtered() {
+  pickCols();
+  const q = $('q').value.trim().toLowerCase(), d = $('dept').value;
+  let list = all.filter(r => (!d || emp.dept(r) === d) && (!status || emp.status(r) === status) &&
+    (!q || [emp.name(r), emp.id(r), emp.email(r), pick(r, ['Nick_Name'])].some(v => v.toLowerCase().includes(q))));
+  if (sortCol >= 0 && sortCol < COLS.length) {
+    const f = COLS[sortCol][1];
+    list = [...list].sort((a, b) => f(a).localeCompare(f(b), undefined, { numeric: true, sensitivity: 'base' }) * sortDir);
+  }
+  return list;
+}
+function renderHead(pageRows) {
+  const allOn = pageRows.length && pageRows.every(r => selected.has(rid(r)));
+  $('head').innerHTML = `<th style="width:44px"><input type="checkbox" id="sel-all" aria-label="Select all"${allOn ? ' checked' : ''}></th>` +
+    COLS.map(([l], i) => `<th class="sort" data-i="${i}">${esc(l)} <span class="arr">${sortCol === i ? (sortDir > 0 ? '↑' : '↓') : '⇅'}</span></th>`).join('');
+  $('sel-all').addEventListener('change', e => { pageRows.forEach(r => e.target.checked ? selected.add(rid(r)) : selected.delete(rid(r))); render(); });
+  $('head').querySelectorAll('.sort').forEach(th => th.addEventListener('click', () => {
+    const i = Number(th.dataset.i); if (sortCol === i) sortDir = -sortDir; else { sortCol = i; sortDir = 1; } render(); }));
+}
+function render() {
+  const list = filtered(), size = Number($('ps').value), pages = Math.max(1, Math.ceil(list.length / size));
+  pageNo = Math.min(pageNo, pages);
+  const from = (pageNo - 1) * size, slice = list.slice(from, from + size);
+  $('total').textContent = list.length;
+  $('pg').textContent = list.length ? `${from + 1} - ${from + slice.length}` : '0'; $('prev').disabled = pageNo <= 1; $('next').disabled = pageNo >= pages;
+  renderHead(slice);
+  $('bulkbar').hidden = !selected.size; $('toolbar').hidden = !!selected.size; $('bulk-n').textContent = selected.size;
+  const tb = $('rows'); tb.replaceChildren();
+  if (!slice.length) { const c = tb.insertRow().insertCell(); c.colSpan = Math.max(1, COLS.length) + 1; c.innerHTML = `<div class="empty"><div class="ico">${icon('users')}</div><b>No employees found</b><p>Try a different search or filter.</p></div>`; return; }
+  for (const r of slice) {
+    const tr = tb.insertRow(); tr.className = 'click' + (selected.has(rid(r)) ? ' sel' : '');
+    const cb = tr.insertCell(); cb.innerHTML = `<input type="checkbox" aria-label="Select ${esc(emp.name(r))}"${selected.has(rid(r)) ? ' checked' : ''}>`;
+    cb.addEventListener('click', e => { e.stopPropagation(); const on = e.target.checked; if (e.target.tagName !== 'INPUT') return; on ? selected.add(rid(r)) : selected.delete(rid(r)); render(); });
+    for (const [, f, kind] of COLS) {
+      const td = tr.insertCell(), v = f(r);
+      if (kind === 'status') td.innerHTML = statusPill(v);
+      else if (kind === 'person') td.innerHTML = `<div class="person">${avatar(emp.name(r))}<span>${esc(v)}</span></div>`;
+      else td.textContent = v;
+    }
+    tr.addEventListener('click', () => detail(r));
+  }
+}
+function detail(r) {
+  current = r;
+  $('d-av').innerHTML = avatar(emp.name(r), 'lg');
+  $('d-name').textContent = emp.name(r);
+  $('d-sub').textContent = [emp.id(r), emp.title(r), emp.dept(r)].filter(Boolean).join(' · ');
+  $('d-list').innerHTML = Object.entries(r).filter(([k, v]) => !HIDE.has(k) && v !== '' && v != null)
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(cell(v))}</dd>`).join('');
+  $('d-raw').textContent = JSON.stringify(r, null, 2);
+  $('detail').showModal();
+}
+async function load() {
+  all = normalizeEmployees(await api('GET', DATA + '/employees'));
+  const ids = new Set(all.map(rid)); [...selected].forEach(i => ids.has(i) || selected.delete(i));
+  fillDept(); renderChips(); renderColList(); render();
+}
+const selectedRows = () => all.filter(r => selected.has(rid(r)));
+
+// ---- wiring ----
+const qs = new URLSearchParams(location.search).get('q'); if (qs) $('q').value = qs;
+['q', 'dept', 'ps'].forEach(id => $(id).addEventListener('input', () => { pageNo = 1; render(); }));
+$('prev').addEventListener('click', () => { pageNo--; render(); }); $('next').addEventListener('click', () => { pageNo++; render(); });
+for (const id of ['detail', 'addbox', 'editbox', 'massbox', 'zohobox']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).close(); });
+for (const [btn, dlg] of [['d-close', 'detail'], ['a-close', 'addbox'], ['e-close', 'editbox'], ['e-cancel', 'editbox'], ['m-close', 'massbox'], ['m-cancel', 'massbox'], ['z-close', 'zohobox'], ['z-cancel', 'zohobox']])
+  $(btn).addEventListener('click', () => $(dlg).close());
+$('add-open').addEventListener('click', () => $('addbox').showModal());
+$('cols-all').addEventListener('click', () => { hiddenCols.clear(); saveHidden(); renderColList(); render(); });
+$('cols-core').addEventListener('click', () => { const core = new Set(CORE.map(c => c[3])); hiddenCols = new Set(allCols().map(c => c[3]).filter(k => !core.has(k))); saveHidden(); renderColList(); render(); });
+function setWide(on) { document.body.classList.toggle('wide', on); $('expand').textContent = on ? 'Collapse' : 'Expand'; try { localStorage.setItem('zp_emp_wide', on ? '1' : ''); } catch { /* ignore */ } }
+$('expand').addEventListener('click', () => setWide(!document.body.classList.contains('wide')));
+try { if (localStorage.getItem('zp_emp_wide') || new URLSearchParams(location.search).get('wide')) setWide(true); } catch { /* ignore */ }
+document.addEventListener('click', e => { if (!$('colpick').contains(e.target)) $('colpick').open = false; });
+$('b-clear').addEventListener('click', () => { selected.clear(); render(); });
+
+$('d-edit').addEventListener('click', () => {
+  $('e-title').textContent = 'Edit ' + emp.name(current);
+  $('e-fields').innerHTML = EDITABLE.map(([k, l]) => `<div><label>${l}</label><input data-k="${k}" data-old="${esc(cell(current[k]))}" value="${esc(cell(current[k]))}"></div>`).join('');
+  $('detail').close(); $('editbox').showModal();
+});
+$('e-save').addEventListener('click', e => run(e.target, async () => {
+  const body = {};
+  $('e-fields').querySelectorAll('input').forEach(i => { if (i.value !== i.dataset.old) body[i.dataset.k] = i.value; });
+  if (!Object.keys(body).length) throw new Error('Nothing changed');
+  if (!current[RID]) throw new Error('Reload the page: this record has no Zoho id');
+  await api('PUT', DATA + '/employees/' + current[RID], body);
+  $('editbox').close(); banner('ok', 'Employee updated in Zoho.'); await load();
+}));
+
+// Mass update: applies one field/value to every selected employee, one Zoho call each.
+$('b-mass').addEventListener('click', () => {
+  $('m-sub').textContent = `${selected.size} employee${selected.size === 1 ? '' : 's'} will be updated in Zoho.`;
+  $('m-field').innerHTML = EDITABLE.map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+  $('m-val').value = ''; $('m-result').textContent = ''; $('massbox').showModal();
+});
+$('m-go').addEventListener('click', e => run(e.target, async () => {
+  const field = $('m-field').value, value = $('m-val').value, rows = selectedRows();
+  if (!rows.length) throw new Error('Nothing selected');
+  if (!confirm(`Set "${$('m-field').selectedOptions[0].text}" to "${value}" for ${rows.length} employee(s) in Zoho?`)) return;
+  let ok = 0; const bad = [];
+  for (const r of rows) {
+    $('m-result').textContent = `Updating ${ok + bad.length + 1} of ${rows.length}…`;
+    try { await api('PUT', DATA + '/employees/' + r[RID], { [field]: value }); ok++; } catch (err) { bad.push(emp.name(r) + ': ' + err.message); }
+  }
+  $('m-result').textContent = `${ok} updated` + (bad.length ? `, ${bad.length} failed — ${bad.join('; ')}` : '.');
+  if (ok) { banner(bad.length ? 'err' : 'ok', `Mass update: ${ok} updated${bad.length ? ', ' + bad.length + ' failed' : ''}.`); selected.clear(); await load(); }
+}));
+
+// Delete and Trigger Onboarding aren't exposed by Zoho's API: explain and send the user to Zoho.
+const ZOHO_TLD = { in: 'in', us: 'com', eu: 'eu', au: 'com.au', jp: 'jp', cn: 'com.cn', ca: 'zohocloud.ca' };
+let zohoHost = 'https://people.zoho.com/';
+api('GET', API + '/status').then(s => { if (ZOHO_TLD[s.dataCenter]) zohoHost = 'https://people.zoho.' + ZOHO_TLD[s.dataCenter] + '/'; }).catch(() => {});
+function needsZoho(title, act) {
+  const rows = selectedRows();
+  $('z-title').textContent = title; $('z-sub').textContent = rows.length + ' selected'; $('z-act').textContent = act;
+  $('z-names').textContent = rows.map(emp.name).join(', ');
+  $('z-link').href = zohoHost; $('zohobox').showModal();
+}
+$('b-del').addEventListener('click', () => needsZoho('Delete employees', 'Delete'));
+$('b-onb').addEventListener('click', () => needsZoho('Trigger onboarding', 'Trigger Onboarding'));
+
+$('csv').addEventListener('click', () => {
+  const keys = [...new Set(all.flatMap(r => Object.keys(r)))], q = v => '"' + cell(v).replace(/"/g, '""') + '"';
+  const csv = [keys.map(q).join(',')].concat(all.map(r => keys.map(k => q(r[k])).join(','))).join('\n');
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: 'zoho-employees.csv' });
+  a.click(); URL.revokeObjectURL(a.href);
+});
+$('sync').addEventListener('click', e => run(e.target, async () => {
+  const r = await api('POST', DATA + '/employees/sync'); await load(); banner('ok', 'Synced ' + r.synced + ' employees from Zoho.');
+}));
+$('a-mode').addEventListener('change', () => { $('a-pw-wrap').hidden = $('a-mode').value !== 'direct'; });
+$('a-go').addEventListener('click', e => run(e.target, async () => {
+  const direct = $('a-mode').value === 'direct';
+  const body = { employeeId: $('a-id').value.trim(), firstName: $('a-first').value.trim(), lastName: $('a-last').value.trim(),
+    email: $('a-email').value.trim(), directAdd: direct, password: direct ? $('a-pw').value : null };
+  if (!body.employeeId || !body.firstName || !body.lastName || !body.email) throw new Error('Fill in all employee fields');
+  await api('POST', DATA + '/employees', body); $('a-pw').value = ''; $('addbox').close();
+  banner('ok', 'Employee sent to Zoho.'); await load();
+}));
+load().catch(e => banner('err', e.message));
+</script></body></html>

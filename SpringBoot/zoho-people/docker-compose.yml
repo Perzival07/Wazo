@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: wazopulse-db
+    environment:
+      POSTGRES_DB: wazopulse
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - wazopulse-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wazopulse"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  wazopulse-pgdata:

@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Settings</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script>
+const inner = settingsShell('integrations', 'Integrations', 'Connect external tools with your account');
+inner.innerHTML = `
+  <section class="card"><div class="integration">
+    <div class="gi" style="--a:#f59e0b;--b:#ef4444">${icon('users')}</div>
+    <div style="flex:1"><h2>Zoho People <span id="pill" class="pill off">Loading…</span></h2>
+      <p class="sub" style="font-size:15px">Connect your Zoho People account to use employees, leave, attendance and HR forms in Wazo Pulse.</p>
+      <dl id="details" hidden style="margin-top:16px"><dt>Connected account</dt><dd id="acct"></dd><dt>Data center</dt><dd id="dc"></dd><dt>Last sync</dt><dd id="sync"></dd><dt>Permissions</dt><dd><ul id="perms" style="margin:0;padding-left:18px"></ul></dd></dl>
+      <div class="actions" id="actions"></div></div></div></section>
+  <section class="card" id="dev"><h2>Dev identity</h2>
+    <p class="hint" style="margin-top:-6px">The dev profile has no login. The email must match your Zoho People email.</p>
+    <div class="grid"><div><label for="tenant">Tenant ID</label><input id="tenant" autocomplete="off"></div>
+      <div><label for="user">User ID</label><input id="user" autocomplete="off"></div>
+      <div><label for="email">Email</label><input id="email" type="email" autocomplete="off"></div></div></section>`;
+
+for (const k of ['tenant', 'user', 'email']) {
+  $(k).value = store.get('zp_' + k) || (k === 'tenant' ? 't1' : k === 'user' ? 'u1' : '');
+  store.set('zp_' + k, $(k).value);
+  $(k).addEventListener('input', () => { store.set('zp_' + k, $(k).value.trim()); });
+}
+const PERMS = { forms: ['View your HR forms', 'View and edit HR forms'], employee: ['View your profile', 'View and update profiles'],
+  leave: ['View your leave', 'View and apply for leave'], attendance: ['View your attendance', 'Check in/out and view attendance'] };
+function renderPerms(scopes) {
+  const ul = $('perms'); ul.replaceChildren(); const seen = new Set();
+  for (const s of (scopes || '').split(/[,\s]+/).filter(Boolean)) {
+    const m = /^ZOHOPEOPLE\.(\w+)\.(\w+)$/i.exec(s), e = m && PERMS[m[1].toLowerCase()];
+    const t = e ? e[/^read$/i.test(m[2]) ? 0 : 1] : s; if (seen.has(t)) continue; seen.add(t);
+    ul.append(Object.assign(document.createElement('li'), { textContent: t }));
+  }
+}
+async function connect() { const { authorizeUrl } = await api('POST', API + '/connect'); location.href = authorizeUrl; }
+function addButton(label, cls, fn) {
+  const b = Object.assign(document.createElement('button'), { textContent: label, className: cls });
+  b.addEventListener('click', () => run(b, fn)); $('actions').append(b);
+}
+async function refresh() {
+  $('actions').replaceChildren();
+  if (!store.get('zp_email')) { $('pill').textContent = 'Enter dev identity'; return; }
+  let s; try { s = await api('GET', API + '/status'); } catch (e) { banner('err', e.message); return; }
+  const ok = s.status === 'CONNECTED', needs = s.status === 'NEEDS_RECONNECT';
+  $('pill').className = 'pill ' + (ok ? 'ok' : needs ? 'warn' : 'off'); $('pill').textContent = ok ? 'Connected' : needs ? 'Needs reconnect' : 'Not connected';
+  $('details').hidden = !(ok || needs);
+  if (ok || needs) { $('acct').textContent = s.zohoEmail || ''; $('dc').textContent = (s.dataCenter || '').toUpperCase();
+    $('sync').textContent = s.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString() : 'Not synced yet'; renderPerms(s.scopes); }
+  if (ok) {
+    addButton('Sync now', 'primary', async () => { const r = await api('POST', API + '/sync'); $('sync').textContent = new Date(r.lastSyncAt).toLocaleString(); banner('ok', 'Synced just now.'); });
+    addButton('Reconnect', '', connect);
+    addButton('Disconnect', 'danger', async () => { if (!confirm('Disconnect Zoho People?')) return; await api('DELETE', API); location.reload(); });
+  } else addButton(needs ? 'Reconnect' : 'Connect with Zoho', 'primary', connect);
+}
+$('email').addEventListener('change', refresh);
+refresh();
+</script></body></html>

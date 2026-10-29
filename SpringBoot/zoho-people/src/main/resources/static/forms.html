@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>All forms</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script src="service.js"></script><script>
+const page = layout('All forms', 'Every form in your Zoho People organisation. Click one to view its records.');
+page.innerHTML = `<a class="back" href="svc-data-administration.html">${icon('back')} Data Administration</a>
+  <section class="card flush"><div class="tablewrap"><table><thead><tr><th>Name</th><th>Link name</th><th>Custom</th></tr></thead><tbody id="rows"></tbody></table></div></section><div id="out"></div>`;
+api('GET', DATA + '/forms').then(d => {
+  for (const f of d.response.result) {
+    const tr = $('rows').insertRow(); tr.className = 'click';
+    for (const v of [f.displayName, f.formLinkName, f.iscustom ? 'Yes' : 'No']) tr.insertCell().textContent = v;
+    tr.addEventListener('click', () => { $('out').replaceChildren(); section($('out'), f.formLinkName, f.displayName); $('out').scrollIntoView({ behavior: 'smooth' }); });
+  }
+}).catch(e => banner('err', e.message));
+</script></body></html>

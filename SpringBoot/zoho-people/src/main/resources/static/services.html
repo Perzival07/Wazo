@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Services</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script src="service.js"></script><script>
+const page = layout('Services', 'Seamlessly manage your HR workflows across every Zoho People module.');
+page.innerHTML = '<div class="tiles">' + SERVICES.map(s =>
+  `<a class="tile${s.note ? ' na' : ''}" href="svc-${s.slug}.html">${s.note ? '<span class="badge na">Not available</span>' : ''}
+   <div class="gi" style="--a:${s.color[0]};--b:${s.color[1]}">${icon(s.glyph)}</div><h3>${esc(s.title)}</h3><p>${esc(s.desc)}</p></a>`).join('') + '</div>';
+</script></body></html>

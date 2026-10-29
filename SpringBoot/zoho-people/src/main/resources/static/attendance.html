@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Attendance</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script>
+const page = layout('Attendance', 'Check in and out of Zoho People.');
+page.innerHTML = `<section class="card"><div class="grid">
+  <div><label for="tz">Time zone</label><input id="tz"></div>
+  <div><label for="loc">Location note (optional)</label><input id="loc"></div></div>
+  <div class="actions"><button class="primary" id="in">Check in</button><button id="out">Check out</button></div>
+  <pre id="res" hidden style="margin-top:16px"></pre></section>`;
+$('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const punch = (path, msg) => e => run(e.target, async () => {
+  const r = await api('POST', DATA + '/attendance/' + path, { timezone: $('tz').value.trim() || null, location: $('loc').value.trim() || null });
+  $('res').textContent = JSON.stringify(r, null, 2); $('res').hidden = false; banner('ok', msg); });
+$('in').addEventListener('click', punch('check-in', 'Checked in.'));
+$('out').addEventListener('click', punch('check-out', 'Checked out.'));
+</script></body></html>

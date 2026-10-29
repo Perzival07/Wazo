@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zoho People Integration</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1c2430; --muted: #667085; --line: #e4e7ec;
+    --brand: #2563eb; --brand-text: #ffffff; --ok: #067647; --ok-bg: #dcfae6;
+    --warn: #93370d; --warn-bg: #fef0c7; --off: #475467; --off-bg: #eaecf0;
+    --err: #b42318; --err-bg: #fee4e2; --code: #0f172a; --code-text: #d1e0ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --card: #171b22; --text: #e8ebf0; --muted: #98a2b3; --line: #2a303a;
+      --brand: #5b8def; --brand-text: #0b1020; --ok: #75e0a7; --ok-bg: #0b3a24;
+      --warn: #fec84b; --warn-bg: #3d2a05; --off: #cbd2dc; --off-bg: #2a303a;
+      --err: #fda29b; --err-bg: #4a1410; --code: #0a0d12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  .crumb { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          padding: 20px; margin-bottom: 16px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.ok { color: var(--ok); background: var(--ok-bg); }
+  .pill.warn { color: var(--warn); background: var(--warn-bg); }
+  .pill.off { color: var(--off); background: var(--off-bg); }
+  dl { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; margin: 16px 0; }
+  dt { color: var(--muted); } dd { margin: 0; word-break: break-word; }
+  ul.perms { margin: 0; padding-left: 18px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+           border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button.primary { background: var(--brand); color: var(--brand-text); border-color: var(--brand); font-weight: 600; }
+  button.danger { color: var(--err); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+  .banner.ok { background: var(--ok-bg); color: var(--ok); }
+  .banner.err { background: var(--err-bg); color: var(--err); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; white-space: nowrap; }
+  tr.detail td { padding: 0 8px 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select { width: 100%; font: inherit; padding: 8px 10px; border-radius: 8px;
+                  border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); }
+  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--brand); font-weight: 600; }
+  pre { background: var(--code); color: var(--code-text); padding: 12px; border-radius: 8px;
+        overflow: auto; max-height: 340px; font-size: 12.5px; margin: 12px 0 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) { dl { grid-template-columns: 1fr; gap: 2px; } dd { margin-bottom: 10px; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="crumb">Account &rsaquo; Integration &rsaquo; Zoho People</div>
+  <h1>Zoho People</h1>
+  <p class="hint" style="margin:0 0 16px">Connect your Zoho People account to use leave, attendance and profile data in Wazo Pulse.</p>
+
+  <div id="banner" class="banner" hidden role="status"></div>
+
+  <details class="card" id="devbox">
+    <summary>Dev identity (local testing only)</summary>
+    <p class="hint">The dev profile has no login, so identify yourself here. The email must match your Zoho People email.</p>
+    <div class="grid">
+      <div><label for="tenant">Tenant ID</label><input id="tenant" autocomplete="off"></div>
+      <div><label for="user">User ID</label><input id="user" autocomplete="off"></div>
+      <div><label for="email">Email</label><input id="email" type="email" autocomplete="off"></div>
+    </div>
+  </details>
+
+  <section class="card" aria-labelledby="status-h">
+    <div class="row">
+      <h2 id="status-h" style="margin:0">Connection</h2>
+      <span id="pill" class="pill off">Loading…</span>
+    </div>
+    <dl id="details" hidden>
+      <dt>Connected account</dt><dd id="acct"></dd>
+      <dt>Data center</dt><dd id="dc"></dd>
+      <dt>Last sync</dt><dd id="sync"></dd>
+      <dt>Permissions granted</dt><dd><ul class="perms" id="perms"></ul></dd>
+    </dl>
+    <p id="reconnect-note" class="hint" hidden>Your Zoho access was revoked or expired. Reconnect to keep using Zoho pages.</p>
+    <div class="actions" id="actions"></div>
+  </section>
+
+  <section class="card" id="tools" hidden aria-label="Zoho People tools">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="profile" aria-selected="true">Profile</button>
+      <button class="tab" role="tab" data-tab="leave" aria-selected="false">Leave</button>
+      <button class="tab" role="tab" data-tab="attendance" aria-selected="false">Attendance</button>
+      <button class="tab" role="tab" data-tab="employees" aria-selected="false">Employees</button>
+    </div>
+
+    <div data-panel="profile">
+      <div class="actions" style="margin-top:0"><button id="load-profile">Load my profile</button></div>
+      <h2 style="margin-top:20px">Update my profile</h2>
+      <p class="hint">Field names are Zoho form field labels, e.g. <code>Mobile</code>. Zoho enforces your permissions.</p>
+      <div class="grid">
+        <div><label for="pf-key">Field</label><input id="pf-key" placeholder="Mobile"></div>
+        <div><label for="pf-val">Value</label><input id="pf-val"></div>
+      </div>
+      <div class="actions"><button id="save-profile">Update</button></div>
+    </div>
+
+    <div data-panel="leave" hidden>
+      <div class="actions" style="margin-top:0"><button id="load-types">Load leave types &amp; balances</button></div>
+      <h2 style="margin-top:20px">Apply for leave</h2>
+      <div class="grid">
+        <div><label for="lv-type">Leave type ID</label><input id="lv-type" placeholder="from the leave types list"></div>
+        <div><label for="lv-from">From</label><input id="lv-from" type="date"></div>
+        <div><label for="lv-to">To</label><input id="lv-to" type="date"></div>
+        <div><label for="lv-count">Day length</label>
+          <select id="lv-count"><option value="1">Full day</option><option value="0.5">Half day</option><option value="0.25">Quarter day</option></select></div>
+      </div>
+      <div class="actions"><button class="primary" id="apply-leave">Apply</button></div>
+      <p class="hint">Half and quarter days need From and To to be the same date.</p>
+    </div>
+
+    <div data-panel="attendance" hidden>
+      <div class="grid">
+        <div><label for="at-tz">Time zone</label><input id="at-tz"></div>
+        <div><label for="at-loc">Location note (optional)</label><input id="at-loc"></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="check-in">Check in</button>
+        <button id="check-out">Check out</button>
+      </div>
+    </div>
+
+    <div data-panel="employees" hidden>
+      <div class="actions" style="margin-top:0"><button class="primary" id="load-employees">Load employees</button></div>
+      <p class="hint" id="em-count" hidden></p>
+      <div class="actions" id="em-tools" style="margin-top:0" hidden>
+        <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="em-all"> Show all fields as columns</label>
+        <button id="em-csv">Download CSV</button>
+      </div>
+      <div style="overflow-x:auto"><table id="em-table" hidden></table></div>
+      <h2 style="margin-top:24px">Add employee</h2>
+      <p class="hint">Creates a real employee in the connected Zoho People org. Your Zoho user needs permission to add employees.</p>
+      <div class="grid">
+        <div><label for="em-id">Employee ID</label><input id="em-id" autocomplete="off"></div>
+        <div><label for="em-first">First name</label><input id="em-first" autocomplete="off"></div>
+        <div><label for="em-last">Last name</label><input id="em-last" autocomplete="off"></div>
+        <div><label for="em-email">Email</label><input id="em-email" type="email" autocomplete="off"></div>
+        <div><label for="em-mode">Mode</label>
+          <select id="em-mode"><option value="invite">Send invitation email (inactive until accepted)</option><option value="direct">Add directly (active, set password)</option></select></div>
+        <div id="em-pw-wrap" hidden><label for="em-pw">Password</label><input id="em-pw" type="password" autocomplete="new-password"></div>
+      </div>
+      <div class="actions"><button class="primary" id="add-employee">Add employee</button></div>
+    </div>
+
+    <pre id="out" hidden></pre>
+  </section>
+
+  <p class="hint">API docs: <a href="/swagger-ui.html">Swagger UI</a></p>
+</main>
+
+<script>
+const API = '/api/integrations/zoho-people';
+const DATA = '/api/zoho-people';
+const $ = id => document.getElementById(id);
+
+const PERMS = {
+  forms: ['View your HR forms', 'View and edit your HR forms'],
+  employee: ['View your profile', 'View and update your profile'],
+  leave: ['View your leave', 'View and apply for leave'],
+  attendance: ['View your attendance', 'Check in/out and view attendance'],
+};
+
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } },
+};
+for (const k of ['tenant', 'user', 'email']) {
+  $(k).value = store.get('zp_' + k) || (k === 'tenant' ? 't1' : k === 'user' ? 'u1' : '');
+  $(k).addEventListener('input', () => { store.set('zp_' + k, $(k).value.trim()); refresh(); });
+}
+$('at-tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function headers(json) {
+  const h = {
+    'X-Tenant-Id': $('tenant').value.trim(),
+    'X-User-Id': $('user').value.trim(),
+    'X-User-Email': $('email').value.trim(),
+  };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method, credentials: 'include', headers: headers(body !== undefined),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) {
+    const msg = (data && data.message) || (typeof data === 'string' && data) || ('HTTP ' + res.status);
+    const err = new Error(msg);
+    err.data = data; err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+function banner(kind, msg) {
+  const b = $('banner');
+  b.className = 'banner ' + kind;
+  b.textContent = msg;
+  b.hidden = !msg;
+}
+
+function show(data) {
+  const o = $('out');
+  o.hidden = false;
+  o.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+}
+
+async function run(btn, fn) {
+  btn.disabled = true;
+  try { await fn(); } catch (e) {
+    banner('err', e.message);
+    if (e.data && e.data.reconnectRequired) refresh();
+  } finally { btn.disabled = false; }
+}
+
+function fmt(iso) {
+  return iso ? new Date(iso).toLocaleString() : 'Not synced yet';
+}
+
+function renderPerms(scopes) {
+  const ul = $('perms');
+  ul.replaceChildren();
+  const seen = new Set();
+  for (const s of (scopes || '').split(/[,\s]+/).filter(Boolean)) {
+    const m = /^ZOHOPEOPLE\.(\w+)\.(\w+)$/i.exec(s);
+    const entry = m && PERMS[m[1].toLowerCase()];
+    const text = entry ? entry[/^read$/i.test(m[2]) ? 0 : 1] : s;
+    if (seen.has(text)) continue;
+    seen.add(text);
+    const li = document.createElement('li');
+    li.textContent = text;
+    ul.append(li);
+  }
+  if (!ul.children.length) ul.append(Object.assign(document.createElement('li'), { textContent: 'None recorded' }));
+}
+
+function addButton(label, cls, onClick) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (cls) b.className = cls;
+  b.addEventListener('click', () => run(b, onClick));
+  $('actions').append(b);
+}
+
+async function connect() {
+  const { authorizeUrl } = await api('POST', API + '/connect');
+  window.location.href = authorizeUrl;
+}
+
+async function refresh() {
+  $('actions').replaceChildren();
+  const ready = $('email').value.trim() && $('tenant').value.trim() && $('user').value.trim();
+  if (!ready) {
+    $('pill').className = 'pill off'; $('pill').textContent = 'Enter dev identity';
+    $('details').hidden = true; $('tools').hidden = true; $('reconnect-note').hidden = true;
+    return;
+  }
+  let s;
+  try { s = await api('GET', API + '/status'); } catch (e) { banner('err', e.message); return; }
+
+  const connected = s.status === 'CONNECTED';
+  const needs = s.status === 'NEEDS_RECONNECT';
+  $('pill').className = 'pill ' + (connected ? 'ok' : needs ? 'warn' : 'off');
+  $('pill').textContent = connected ? 'Connected' : needs ? 'Needs reconnect' : 'Not connected';
+  $('details').hidden = !(connected || needs);
+  $('reconnect-note').hidden = !needs;
+  $('tools').hidden = !connected;
+
+  if (connected || needs) {
+    $('acct').textContent = s.zohoEmail || '';
+    $('dc').textContent = (s.dataCenter || '').toUpperCase();
+    $('sync').textContent = fmt(s.lastSyncAt);
+    renderPerms(s.scopes);
+  }
+
+  if (connected) {
+    addButton('Sync now', 'primary', async () => {
+      const r = await api('POST', API + '/sync');
+      banner('ok', 'Synced just now.');
+      $('sync').textContent = fmt(r.lastSyncAt);
+    });
+    addButton('Reconnect', '', connect);
+    addButton('Disconnect', 'danger', async () => {
+      if (!confirm('Disconnect Zoho People? This revokes access and deletes the stored token.')) return;
+      await api('DELETE', API);
+      banner('ok', 'Disconnected.');
+      await refresh();
+    });
+  } else if (needs) {
+    addButton('Reconnect', 'primary', connect);
+    addButton('Disconnect', 'danger', async () => { await api('DELETE', API); await refresh(); });
+  } else {
+    addButton('Connect', 'primary', connect);
+  }
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', String(x === t)));
+  document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== t.dataset.tab; });
+  $('out').hidden = true;
+}));
+
+// Tool actions
+$('load-profile').addEventListener('click', e => run(e.target, async () => show(await api('GET', DATA + '/me'))));
+$('load-types').addEventListener('click', e => run(e.target, async () => show(await api('GET', DATA + '/leave/types'))));
+$('save-profile').addEventListener('click', e => run(e.target, async () => {
+  const k = $('pf-key').value.trim();
+  if (!k) throw new Error('Enter a field name');
+  show(await api('PUT', DATA + '/me', { [k]: $('pf-val').value }));
+  banner('ok', 'Profile updated.');
+}));
+$('apply-leave').addEventListener('click', e => run(e.target, async () => {
+  const body = {
+    leaveTypeId: $('lv-type').value.trim(), from: $('lv-from').value, to: $('lv-to').value || $('lv-from').value,
+    leaveCount: Number($('lv-count').value),
+  };
+  show(await api('POST', DATA + '/leave', body));
+  banner('ok', 'Leave request sent to Zoho.');
+}));
+// Zoho returns either a flat array of records or {response:{result:[{<recordId>:[{...}]}]}}.
+function normalizeEmployees(data) {
+  let rows = Array.isArray(data) ? data : (data && data.response && data.response.result) || [];
+  return rows.map(r => {
+    const v = Object.values(r || {});
+    return v.length === 1 && Array.isArray(v[0]) ? v[0][0] : r;
+  }).filter(r => r && typeof r === 'object');
+}
+function pick(rec, names) {
+  const norm = k => k.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const map = Object.fromEntries(Object.keys(rec).map(k => [norm(k), rec[k]]));
+  for (const n of names) if (map[norm(n)] != null && map[norm(n)] !== '') return String(map[norm(n)]);
+  return '';
+}
+const EM_COLS = [
+  ['Employee ID', ['EmployeeID']], ['Name', ['FirstName', 'First Name']], ['Last name', ['LastName', 'Last Name']],
+  ['Email', ['EmailID', 'Email ID', 'Email']], ['Department', ['Department']],
+  ['Designation', ['Designation']], ['Status', ['Employeestatus', 'Employee Status']],
+];
+let emList = [];
+const cell = v => v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+function allKeys(list) { return [...new Set(list.flatMap(r => Object.keys(r)))]; }
+function renderEmployees(list) {
+  emList = list;
+  $('em-tools').hidden = !list.length;
+  if ($('em-all').checked) return renderAllColumns(list);
+  const t = $('em-table');
+  t.replaceChildren();
+  const head = t.createTHead().insertRow();
+  for (const [label] of EM_COLS) head.append(Object.assign(document.createElement('th'), { textContent: label }));
+  head.append(document.createElement('th'));
+  const body = t.createTBody();
+  for (const rec of list) {
+    const tr = body.insertRow();
+    for (const [, names] of EM_COLS) tr.insertCell().textContent = pick(rec, names);
+    const btn = Object.assign(document.createElement('button'), { textContent: 'Details' });
+    tr.insertCell().append(btn);
+    const dr = body.insertRow();
+    dr.className = 'detail'; dr.hidden = true;
+    const td = dr.insertCell(); td.colSpan = EM_COLS.length + 1;
+    const pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(rec, null, 2);
+    td.append(pre);
+    btn.addEventListener('click', () => { dr.hidden = !dr.hidden; });
+  }
+  t.hidden = !list.length;
+  $('em-count').hidden = false;
+  $('em-count').textContent = list.length + ' employee' + (list.length === 1 ? '' : 's');
+}
+function renderAllColumns(list) {
+  const t = $('em-table'), keys = allKeys(list);
+  t.replaceChildren();
+  const head = t.createTHead().insertRow();
+  for (const k of keys) head.append(Object.assign(document.createElement('th'), { textContent: k }));
+  const body = t.createTBody();
+  for (const rec of list) {
+    const tr = body.insertRow();
+    for (const k of keys) tr.insertCell().textContent = cell(rec[k]);
+  }
+  t.hidden = !list.length;
+  $('em-count').hidden = false;
+  $('em-count').textContent = list.length + ' employees, ' + keys.length + ' fields';
+}
+$('em-all').addEventListener('change', () => renderEmployees(emList));
+$('em-csv').addEventListener('click', () => {
+  const keys = allKeys(emList), q = v => '"' + cell(v).replace(/"/g, '""') + '"';
+  const csv = [keys.map(q).join(',')].concat(emList.map(r => keys.map(k => q(r[k])).join(','))).join('\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: 'zoho-employees.csv' });
+  a.click(); URL.revokeObjectURL(a.href);
+});
+$('load-employees').addEventListener('click', e => run(e.target, async () => {
+  const list = normalizeEmployees(await api('GET', DATA + '/employees'));
+  renderEmployees(list);
+  banner('ok', 'Loaded ' + list.length + ' employees.');
+}));
+$('em-mode').addEventListener('change', () => { $('em-pw-wrap').hidden = $('em-mode').value !== 'direct'; });
+$('add-employee').addEventListener('click', e => run(e.target, async () => {
+  const direct = $('em-mode').value === 'direct';
+  const body = {
+    employeeId: $('em-id').value.trim(), firstName: $('em-first').value.trim(),
+    lastName: $('em-last').value.trim(), email: $('em-email').value.trim(),
+    directAdd: direct, password: direct ? $('em-pw').value : null,
+  };
+  if (!body.employeeId || !body.firstName || !body.lastName || !body.email) throw new Error('Fill in all employee fields');
+  show(await api('POST', DATA + '/employees', body));
+  $('em-pw').value = '';
+  banner('ok', 'Employee sent to Zoho.');
+}));
+function punch(path, label) {
+  return e => run(e.target, async () => {
+    show(await api('POST', DATA + '/attendance/' + path,
+      { timezone: $('at-tz').value.trim() || null, location: $('at-loc').value.trim() || null }));
+    banner('ok', label);
+  });
+}
+$('check-in').addEventListener('click', punch('check-in', 'Checked in.'));
+$('check-out').addEventListener('click', punch('check-out', 'Checked out.'));
+
+// Result of the Zoho redirect: ?zoho=connected or ?zoho=error&reason=...
+const q = new URLSearchParams(location.search);
+if (q.has('zoho')) {
+  if (q.get('zoho') === 'connected') banner('ok', 'Zoho People connected.');
+  else banner('err', 'Could not connect: ' + (q.get('reason') || 'unknown error').replace(/_/g, ' ') + '.');
+  history.replaceState(null, '', location.pathname);
+}
+refresh();
+</script>
+</body>
+</html>

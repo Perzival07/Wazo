@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Home</title><link rel="stylesheet" href="app.css"></head><body><script src="app.js"></script><script>
+const page = layout('Home', 'A snapshot of your Zoho People organisation.');
+page.innerHTML = `<div class="home">
+  <aside>
+    <section class="card profile"><div class="banner-art"></div><div class="body">
+      <div id="me-av"></div><h2 id="me-name">…</h2><span class="hint" id="me-sub"></span>
+      <div class="stats3"><div><b id="s-emp">–</b><span>Employees</span></div><div><b id="s-dept">–</b><span>Departments</span></div><div><b id="s-act">–</b><span>Active</span></div></div>
+    </div></section>
+  </aside>
+  <div>
+    <section class="card"><h2 style="text-align:center">What would you like to do today?</h2><div class="todo">
+      <a href="employees.html" style="--c:#f59e0b"><span class="dot">${icon('users')}</span>Employees</a>
+      <a href="services.html" style="--c:#5b4ff0"><span class="dot">${icon('grid')}</span>Services</a>
+      <a href="attendance.html" style="--c:#8b5cf6"><span class="dot">${icon('calendar')}</span>Attendance</a>
+      <a href="svc-leave-tracker.html" style="--c:#10b981"><span class="dot">${icon('umbrella')}</span>Leave</a></div></section>
+    <section class="card"><h2>Employees by department</h2><div id="depts" class="hint">Loading…</div></section>
+  </div>
+  <aside>
+    <section class="card"><div class="row" style="margin-bottom:14px"><h2 style="margin:0">Action Center</h2><a href="settings.html" class="hint">Settings</a></div>
+      <div id="conn" class="action off"><span class="ico-sq">${icon('plug')}</span><div><b>Checking…</b><span>Zoho People</span></div></div></section>
+  </aside></div>`;
+
+async function load() {
+  const email = store.get('zp_email');
+  const name = email ? email.split('@')[0].replace(/[._]/g, ' ') : 'You';
+  $('me-av').innerHTML = avatar(name, 'xl'); $('me-name').textContent = name.replace(/\b\w/g, c => c.toUpperCase()); $('me-sub').textContent = email;
+  let s;
+  try { s = await api('GET', API + '/status'); } catch (e) { banner('err', e.message); return; }
+  const ok = s.status === 'CONNECTED', needs = s.status === 'NEEDS_RECONNECT';
+  $('conn').className = 'action ' + (ok ? '' : needs ? 'warn' : 'off');
+  $('conn').innerHTML = `<span class="ico-sq">${icon(ok ? 'shield' : 'plug')}</span><div><b>${ok ? 'Zoho People connected' : needs ? 'Reconnect needed' : 'Not connected'}</b>
+    <span>${ok ? esc(s.zohoEmail || '') : '<a href="settings.html">Open Integrations</a>'}</span></div>`;
+  if (!ok) { $('depts').innerHTML = '<div class="empty" style="padding:24px"><b>Connect Zoho People to see your data</b><p>Open Settings → Integrations.</p><a href="settings.html"><button class="primary">Go to Integrations</button></a></div>'; return; }
+  const list = normalizeEmployees(await api('GET', DATA + '/employees'));
+  const by = f => list.reduce((m, r) => (m[f(r) || 'Unassigned'] = (m[f(r) || 'Unassigned'] || 0) + 1, m), {});
+  const depts = by(emp.dept);
+  $('s-emp').textContent = list.length; $('s-dept').textContent = Object.keys(depts).length; $('s-act').textContent = list.filter(r => /active/i.test(emp.status(r))).length;
+  const max = Math.max(1, ...Object.values(depts));
+  $('depts').className = '';
+  $('depts').innerHTML = Object.entries(depts).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+    `<div class="row" style="margin-bottom:12px;flex-wrap:nowrap"><span style="width:130px;font-weight:600">${esc(k)}</span>
+     <div style="flex:1"><div class="bar" style="width:${v / max * 100}%"></div></div><b>${v}</b></div>`).join('');
+}
+load().catch(e => banner('err', e.message));
+</script></body></html>
